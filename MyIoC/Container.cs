@@ -9,41 +9,111 @@ namespace MyIoC
 {
 	public class Container
 	{
-		private IEnumerable<TypeInfo> registredImportConstructor;
-		private IEnumerable<TypeInfo> registredImportProperty;
-		private IEnumerable<TypeInfo> registredExport;
+		private List<TypeInfo> registredImportConstructor = new List<TypeInfo>();
+		private List<TypeInfo> registredImportProperty = new List<TypeInfo>();
+		private List<TypeInfo> registredExport = new List<TypeInfo>();
+
 		public void AddAssembly(Assembly assembly)
 		{
-			var isComstructorAndPropertyAttributies = assembly.DefinedTypes.Where(x => x.IsClass && x.GetCustomAttributes(false)
-			.Any(y => y.GetType() == typeof(ImportConstructorAttribute)) &&
-			x.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-			.Any(y => y.GetCustomAttributes(false).Any(z => z.GetType() == typeof(ImportAttribute)))).Any();
+			if (assembly == null)
+			{
+				throw new NullReferenceException("Assembly must not be null!");
+			}
 
-			if (isComstructorAndPropertyAttributies)
+			var allClasses = assembly.DefinedTypes.Where(x => x.IsClass);
+
+			if (IsComstructorAndPropertyAttributiesBoth(allClasses))
 			{
 				throw new AmbiguousMatchException("Dependency injection can be used only for constructor or property but not both");
 			}
 
-			registredImportConstructor = assembly.DefinedTypes.Where(x => x.IsClass && x.GetCustomAttributes(false)
-				.Any(y => y.GetType() == typeof(ImportConstructorAttribute)));
+			allClasses.ToList().ForEach(y => AddType(y));
+		}
 
-			registredExport = assembly.DefinedTypes.Where(x => x.IsClass && x.GetCustomAttributes(false)
-			.Any(y => y.GetType() == typeof(ExportAttribute)));
+		public void AddType(Type type, Type contractType)
+		{
+			if (type == null || contractType == null)
+			{
+				throw new NullReferenceException("Type and contract type must not be null!");
+			}
 
-			registredImportProperty = assembly.DefinedTypes.Where(x => x.IsClass && x.GetProperties(BindingFlags.Public | BindingFlags.Instance)
-			.Any(y => y.GetCustomAttributes(false).Any(z => z.GetType() == typeof(ImportAttribute))));
+			var attr = type.GetTypeInfo().GetCustomAttribute<ExportAttribute>();
+			if (attr.Contract?.GetTypeInfo() != contractType.GetTypeInfo())
+			{
+				throw new AmbiguousMatchException($"Don't have attribute {type.GetTypeInfo().Name} with contract type {contractType.GetTypeInfo().Name}");
+			}
 
+			registredExport.Add(type.GetTypeInfo());
 		}
 
 		public void AddType(Type type)
 		{
-			//type.GetCustomAttributes().Any(x => x.GetType() == typeof(ExportAttribute) || x.GetType() == typeof(ImportAttribute) || x.GetType() == typeof(ImportConstructorAttribute));
+			if (type == null)
+			{
+				throw new NullReferenceException("Type  must not be null!");
+			}
+
+			if (IsImportConstructorAndImportPropertyAttributiesBoth(type))
+			{
+				throw new AmbiguousMatchException("Dependency injection can be used only for constructor or property but not both");
+			}
+
+			var IsExportAttributeAttributes = type.GetCustomAttributes(false)
+				.Any(x => x.GetType() == typeof(ExportAttribute));
+
+			if (IsExportAttributeAttributes)
+			{
+				registredExport.Add(type.GetTypeInfo());
+			}
+
+			var IsImportConstructorAttributes = type.GetCustomAttributes(false)
+				.Any(x => x.GetType() == typeof(ImportConstructorAttribute));
+
+			if (IsImportConstructorAttributes)
+			{
+				registredImportConstructor.Add(type.GetTypeInfo());
+
+				// return because if import constructor attribute exist than import property attribute not exist
+				return;
+			}
+
+			var IsPropertyImportAttributes = type.GetProperties()
+				.Any(x => x.GetCustomAttributes(false).Any(y => y.GetType() == typeof(ImportAttribute)));
+
+			if (IsPropertyImportAttributes)
+			{
+				registredImportProperty.Add(type.GetTypeInfo());
+			}
 		}
 
-		public void AddType(Type type, Type baseType)
-		{ }
+		private bool IsComstructorAndPropertyAttributiesBoth(IEnumerable<TypeInfo> allClasses)
+		{
+			foreach (var classType in allClasses)
+			{
+				if (IsImportConstructorAndImportPropertyAttributiesBoth(classType))
+				{
+					return true;
+				}
+			}
+
+			return false;
+		}
+
+		private bool IsImportConstructorAndImportPropertyAttributiesBoth(Type type)
+		{
+			var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
+
+			bool isPropertyImportAttribute = properties.Any(y => y.GetCustomAttributes(false).Any(z => z.GetType() == typeof(ImportAttribute)));
+			bool isClassImportConstructorAttribute = type.GetCustomAttributes(false).Any(x => x.GetType() == typeof(ImportConstructorAttribute));
+
+			return isPropertyImportAttribute && isClassImportConstructorAttribute;
+		}
 
 		
+
+		
+
+		// continue refactoring 
 
 		private bool IsInstanceParamRegistred(ConstructorInfo ctorInfo)
 		{

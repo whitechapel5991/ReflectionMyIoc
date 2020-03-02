@@ -19,6 +19,7 @@ namespace MyIoC
 		}
 	}
 
+	[Export()]
 	public class CustomerBLL2
 	{
 		[Import]
