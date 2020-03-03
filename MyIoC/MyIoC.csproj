@@ -36,6 +36,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
+    <Reference Include="System.ComponentModel.DataAnnotations" />
   </ItemGroup>
   <Choose>
     <When Condition="('$(VisualStudioVersion)' == '10.0' or '$(VisualStudioVersion)' == '') and '$(TargetFrameworkVersion)' == 'v3.5'">
@@ -52,11 +53,17 @@
   <ItemGroup>
     <Compile Include="Class1.cs" />
     <Compile Include="Container.cs" />
+    <Compile Include="Framework\Connection.cs" />
+    <Compile Include="Framework\Repository\AbstractRepository.cs" />
+    <Compile Include="Framework\Repository\IRepository.cs" />
+    <Compile Include="Framework\Repository\SomeRepository.cs" />
+    <Compile Include="Framework\Service\Service.cs" />
     <Compile Include="ICustomerDAL.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="ImportAttribute.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
+  <ItemGroup />
   <Choose>
     <When Condition="'$(VisualStudioVersion)' == '10.0' And '$(IsCodedUITest)' == 'True'">
       <ItemGroup>

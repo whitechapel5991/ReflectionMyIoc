@@ -4,7 +4,7 @@
 	{
 	}
 
-	[Export(typeof(ICustomerDAL))]
+	//[Export(typeof(ICustomerDAL))]
 	public class CustomerDAL : ICustomerDAL
 	{ }
 }

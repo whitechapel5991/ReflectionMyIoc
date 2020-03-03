@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace MyIoC
 {
-	[ImportConstructor]
+	//[ImportConstructor]
 	public class CustomerBLL
 	{
 		private readonly ICustomerDAL customer;
@@ -19,12 +19,12 @@ namespace MyIoC
 		}
 	}
 
-	[Export()]
+	//[Export()]
 	public class CustomerBLL2
 	{
 		[Import]
 		public ICustomerDAL CustomerDAL { get; set; }
-		[Import]
+		//[Import]
 		public Logger logger { get; set; }
 	}
 }

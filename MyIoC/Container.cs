@@ -13,6 +13,7 @@ namespace MyIoC
 		private List<TypeInfo> registredImportProperty = new List<TypeInfo>();
 		private List<TypeInfo> registredExport = new List<TypeInfo>();
 
+		#region Registration typies to container
 		public void AddAssembly(Assembly assembly)
 		{
 			if (assembly == null)
@@ -20,33 +21,82 @@ namespace MyIoC
 				throw new NullReferenceException("Assembly must not be null!");
 			}
 
-			var allClasses = assembly.DefinedTypes.Where(x => x.IsClass);
+			var allClassesWithAttributes = assembly.DefinedTypes.Where(x => x.IsClass && x.GetCustomAttributes(false)
+				.Any(y => y.GetType() == typeof(ExportAttribute) ||
+				y.GetType() == typeof(ImportAttribute) ||
+				y.GetType() == typeof(ImportConstructorAttribute)));
 
-			if (IsImportConstructorAndImportPropertyAttributiesBoth(allClasses))
+			if (IsImportConstructorAndImportPropertyAttributiesBoth(allClassesWithAttributes))
 			{
 				throw new AmbiguousMatchException("Dependency injection can be used only for constructor or property but not both");
 			}
 
-			allClasses.ToList().ForEach(y => AddType(y));
+			allClassesWithAttributes.ToList().ForEach(y => AddType(y));
+		}
+
+		public void AddType(Type type)
+		{
+			ValidateType(type);
+
+			var IsExportAttribute = type.GetCustomAttributes(false)
+				.Any(x => x.GetType() == typeof(ExportAttribute));
+
+			if (IsExportAttribute)
+			{
+				ExportAttribute exportAttribute = type.GetTypeInfo().GetCustomAttribute<ExportAttribute>();
+
+				bool isExportAttributeWithContract = exportAttribute.Contract != null;
+
+				if (isExportAttributeWithContract)
+				{
+					// add using special methods for export with contract
+					AddType(type, exportAttribute.Contract);
+				}
+				else
+				{
+					registredExport.Add(type.GetTypeInfo());
+				}
+			}
+
+			RegistredImportConstructorAndPropertyIfExistAttribute(type);
 		}
 
 		public void AddType(Type type, Type contractType)
 		{
-			if (type == null || contractType == null)
-			{
-				throw new NullReferenceException("Type and contract type must not be null!");
-			}
+			ValidateType(type);
+			ValidateType(contractType);
 
-			var attr = type.GetTypeInfo().GetCustomAttribute<ExportAttribute>();
-			if (attr.Contract?.GetTypeInfo() != contractType.GetTypeInfo())
-			{
-				throw new AmbiguousMatchException($"Don't have attribute {type.GetTypeInfo().Name} with contract type {contractType.GetTypeInfo().Name}");
-			}
+			ValidateContractType(type, contractType);
 
 			registredExport.Add(type.GetTypeInfo());
+
+			RegistredImportConstructorAndPropertyIfExistAttribute(type);
 		}
 
-		public void AddType(Type type)
+		private void RegistredImportConstructorAndPropertyIfExistAttribute(Type type)
+		{
+			var IsImportConstructorAttributes = type.GetCustomAttributes(false)
+				.Any(x => x.GetType() == typeof(ImportConstructorAttribute));
+
+			if (IsImportConstructorAttributes)
+			{
+				registredImportConstructor.Add(type.GetTypeInfo());
+
+				// return because if import constructor attribute exist = import property attribute not exist
+				return;
+			}
+
+			var IsPropertyImportAttributes = type.GetProperties()
+				.Any(x => x.GetCustomAttributes(false).Any(y => y.GetType() == typeof(ImportAttribute)));
+
+			if (IsPropertyImportAttributes)
+			{
+				registredImportProperty.Add(type.GetTypeInfo());
+			}
+		}
+
+		#region Validation
+		private void ValidateType(Type type)
 		{
 			if (type == null)
 			{
@@ -57,33 +107,21 @@ namespace MyIoC
 			{
 				throw new AmbiguousMatchException("Dependency injection can be used only for constructor or property but not both");
 			}
+		}
 
-
-			var IsExportAttributeAttributes = type.GetCustomAttributes(false)
-				.Any(x => x.GetType() == typeof(ExportAttribute));
-
-			if (IsExportAttributeAttributes)
+		private void ValidateContractType(Type type, Type contractType)
+		{
+			bool isImplementInterface = type.GetTypeInfo().GetInterfaces().Any(x => x.GetTypeInfo() == contractType.GetTypeInfo());
+			bool isImplementAbstractClass = type.GetTypeInfo().BaseType.GetTypeInfo() == contractType.GetTypeInfo();
+			if (!isImplementInterface && !isImplementAbstractClass)
 			{
-				registredExport.Add(type.GetTypeInfo());
+				throw new AmbiguousMatchException("Class must implemented contract type");
 			}
 
-			var IsImportConstructorAttributes = type.GetCustomAttributes(false)
-				.Any(x => x.GetType() == typeof(ImportConstructorAttribute));
-
-			if (IsImportConstructorAttributes)
+			ExportAttribute exportAttribute = type.GetTypeInfo().GetCustomAttribute<ExportAttribute>();
+			if (exportAttribute.Contract?.GetTypeInfo() != contractType.GetTypeInfo())
 			{
-				registredImportConstructor.Add(type.GetTypeInfo());
-
-				// return because if import constructor attribute exist than import property attribute not exist
-				return;
-			}
-
-			var IsPropertyImportAttributes = type.GetProperties()
-				.Any(x => x.GetCustomAttributes(false).Any(y => y.GetType() == typeof(ImportAttribute)));
-
-			if (IsPropertyImportAttributes)
-			{
-				registredImportProperty.Add(type.GetTypeInfo());
+				throw new AmbiguousMatchException($"Don't have attribute {type.GetTypeInfo().Name} with contract type {contractType.GetTypeInfo().Name}");
 			}
 		}
 
@@ -109,87 +147,10 @@ namespace MyIoC
 
 			return isPropertyImportAttribute && isClassImportConstructorAttribute;
 		}
+		#endregion
+		#endregion
 
-		
-
-		
-
-		// continue refactoring 
-
-
-		//private ConstructorInfo IsParamRegistred(ConstructorInfo[] constructors)
-		//{
-		//	foreach (var constructor in constructors)
-		//	{
-		//		if (!IsInstanceParamRegistred(constructor))
-		//		{
-		//			continue;
-		//		}
-
-		//		if (!IsAbstractParamRegistred(constructor))
-		//		{
-		//			continue;
-		//		}
-		//	}
-		//	return;
-		//}
-
-		private object CreateExportParam(Type type)
-		{
-			bool isExport = registredExport.Any(x => x.GetTypeInfo() == type.GetTypeInfo());
-			bool isExportContractType = registredExport.Any(x => x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == type.GetTypeInfo());
-
-			if (isExport)
-			{
-				var constructor = type.GetTypeInfo().GetConstructors().First();
-
-				var instance = constructor.Invoke(parameters: null);
-				return instance;
-			}
-			if (isExportContractType)
-			{
-				var constructor = registredExport.First(x => x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == type.GetTypeInfo())
-					.GetConstructors().First();
-
-				var instance = constructor.Invoke(parameters: null);
-				return instance;
-			}
-
-			return null;
-		}
-
-		//private bool IsInstanceParamRegistred(ConstructorInfo ctorInfo)
-		//{
-		//	var classParams = ctorInfo.GetParameters().Where(x => x.ParameterType.IsClass && !x.ParameterType.IsAbstract);
-		//	return classParams.All(z => registredExport.Any(x => x.GetTypeInfo() == z.ParameterType.GetTypeInfo()));
-		//}
-
-		//private bool IsAbstractParamRegistred(ConstructorInfo ctorInfo)
-		//{
-		//	var abstractParams = ctorInfo.GetParameters().Where(x => x.ParameterType.IsInterface || x.ParameterType.IsAbstract);
-		//	return abstractParams.All(z => registredExport.Any(x => x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == z.ParameterType.GetTypeInfo()));
-		//}
-
-		private bool IsExportParamRegistred(Type exportType)
-		{
-			var type = exportType.GetTypeInfo();
-			return registredExport.Any(x => x.GetTypeInfo() == type 
-				|| x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == type);
-		}
-
-		private bool IsAllConstructorParametersRegistred(ConstructorInfo constructor)
-		{
-			foreach (var parameter in constructor.GetParameters())
-			{
-				if (!IsExportParamRegistred(parameter.ParameterType))
-				{
-					return false;
-				}
-			}
-
-			return true;
-		}
-
+		#region Create instance
 		public object CreateInstance(Type type)
 		{
 			bool isConstructorImprort = registredImportConstructor.Any(x => x.GetTypeInfo() == type.GetTypeInfo());
@@ -204,63 +165,15 @@ namespace MyIoC
 
 			if (isConstructorImprort)
 			{
-				var constructors = type.GetTypeInfo().GetConstructors();
-
-				foreach (var constructor in constructors)
-				{
-					//if (!IsInstanceParamRegistred(constructor))
-					//{
-					//	continue;
-					//}
-
-					//if (!IsAbstractParamRegistred(constructor))
-					//{
-					//	continue;
-					//}
-
-					// Find constructor with all registred parameters
-					if (!IsAllConstructorParametersRegistred(constructor))
-					{
-						continue;
-					}
-
-
-					object[] parametersInstance = new object[constructor.GetParameters().Count()];
-
-					int i = 0;
-					foreach (ParameterInfo param in constructor.GetParameters())
-					{
-						var paramType = param.ParameterType;
-						var paramInstance = CreateExportParam(paramType);
-						parametersInstance[i] = paramInstance;
-						i++;
-					}
-
-					var instance = constructor.Invoke(parametersInstance);
-					return instance;
-				}
-
-				return null;
+				return CreateInstanceWithConstructorInjection(type);
 			}
 			if (isPropertyImport)
 			{
-				var properties = type.GetTypeInfo().GetProperties();
-
-				var instance = Activator.CreateInstance(type);
-
-				foreach (var property in properties)
-				{
-					var propertyType = property.PropertyType;
-					var propertyInstance = CreateExportParam(propertyType);
-
-					property.SetValue(instance, propertyInstance);
-				}
-
-				return instance;
+				return CreateInstanceWithPropertyInjection(type);
 			}
 
-			return null;
-	}
+			throw new Exception("Unknow exception!");
+		}
 
 
 		public T CreateInstance<T>()
@@ -268,19 +181,119 @@ namespace MyIoC
 			var type = typeof(T);
 			return (T)CreateInstance(type);
 		}
+		#endregion
 
 
-		public void Sample()
+		#region Constructor Injection
+		private object CreateInstanceWithConstructorInjection(Type type)
 		{
-			var container = new Container();
-			container.AddAssembly(Assembly.GetExecutingAssembly());
+			var constructors = type.GetTypeInfo().GetConstructors();
 
-			var customerBLL = (CustomerBLL)container.CreateInstance(typeof(CustomerBLL));
-			var customerBLL2 = container.CreateInstance<CustomerBLL>();
+			foreach (var constructor in constructors)
+			{
+				// Find constructor with all registred parameters
+				if (IsAllConstructorParametersRegistred(constructor))
+				{
+					object[] parametersInstance = new object[constructor.GetParameters().Count()];
 
-			container.AddType(typeof(CustomerBLL));
-			container.AddType(typeof(Logger));
-			container.AddType(typeof(CustomerDAL), typeof(ICustomerDAL));
+					int i = 0;
+					foreach (ParameterInfo param in constructor.GetParameters())
+					{
+						var paramInstance = CreateExportParam(param.ParameterType);
+						parametersInstance[i] = paramInstance;
+						i++;
+					}
+
+					return constructor.Invoke(parametersInstance);
+				}
+			}
+
+			throw new Exception("Unknow exception");
 		}
+
+		private bool IsAllConstructorParametersRegistred(ConstructorInfo constructor)
+		{
+			foreach (var parameter in constructor.GetParameters())
+			{
+				if (!IsExportParamRegistred(parameter.ParameterType))
+				{
+					return false;
+				}
+			}
+
+			return true;
+		}
+		#endregion
+
+		#region Property Injection
+		private object CreateInstanceWithPropertyInjection(Type type)
+		{
+			// Properties which mark Import attribute
+			var properties = type.GetTypeInfo().GetProperties().Where(x => x.GetCustomAttributes(false).Any(y => y.GetType() == typeof(ImportAttribute)));
+
+			var instance = Activator.CreateInstance(type);
+
+			foreach (var property in properties)
+			{
+				if (IsExportParamRegistred(property.PropertyType))
+				{
+					var propertyInstance = CreateExportParam(property.PropertyType);
+
+					property.SetValue(instance, propertyInstance);
+				}
+			}
+
+			return instance;
+		}
+		#endregion
+
+
+		private bool IsExportParamRegistred(Type exportType)
+		{
+			var type = exportType.GetTypeInfo();
+			return registredExport.Any(x => x.GetTypeInfo() == type
+				|| x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == type);
+		}
+
+		#region Export types
+		private object CreateExportParam(Type type)
+		{
+			bool isExport = registredExport.Any(x => x.GetTypeInfo() == type.GetTypeInfo());
+			bool isExportContractType = registredExport.Any(x => x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == type.GetTypeInfo());
+
+			if (isExport)
+			{
+				return CreateExportInstance(type);
+			}
+			if (isExportContractType)
+			{
+				var contractType = registredExport.First(x => x.GetCustomAttribute<ExportAttribute>(false).Contract?.GetTypeInfo() == type.GetTypeInfo());
+				return CreateExportInstance(contractType);
+			}
+
+			throw new Exception("Unknow exception");
+		}
+
+		private object CreateExportInstance(Type type)
+		{
+			object instance = null;
+
+			bool isConstructorImprort = registredImportConstructor.Any(x => x.GetTypeInfo() == type.GetTypeInfo());
+			bool isPropertyImport = registredImportProperty.Any(x => x.GetTypeInfo() == type.GetTypeInfo());
+
+			if (isConstructorImprort || isPropertyImport)
+			{
+				instance = CreateInstance(type);
+			}
+			else
+			{
+				var constructor = type.GetTypeInfo().GetConstructor(Type.EmptyTypes);
+
+				instance = constructor.Invoke(parameters: null);
+			}
+
+			return instance;
+		}
+		#endregion
 	}
 }

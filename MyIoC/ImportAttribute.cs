@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace MyIoC
 {
-	[AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
+	[AttributeUsage(AttributeTargets.Property)]
 	public class ImportAttribute : Attribute
 	{
 	}
@@ -17,6 +18,7 @@ namespace MyIoC
 	}
 
 	[AttributeUsage(AttributeTargets.Class)]
+
 	public class ExportAttribute : Attribute
 	{
 		public ExportAttribute()
@@ -31,10 +33,10 @@ namespace MyIoC
 	}
 
 
-	[Export]
+	//[Export]
 	public class ContractBLL {}
 
-	[Export]
+	//[Export]
 	public class ContractDLL { }
 
 }
