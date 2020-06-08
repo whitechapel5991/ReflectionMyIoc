@@ -31,12 +31,4 @@ namespace MyIoC
 
 		public Type Contract { get; private set; }
 	}
-
-
-	//[Export]
-	public class ContractBLL {}
-
-	//[Export]
-	public class ContractDLL { }
-
 }

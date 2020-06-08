@@ -51,15 +51,12 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
-    <Compile Include="Class1.cs" />
     <Compile Include="Container.cs" />
     <Compile Include="Framework\Connection.cs" />
     <Compile Include="Framework\Repository\AbstractRepository.cs" />
     <Compile Include="Framework\Repository\IRepository.cs" />
     <Compile Include="Framework\Repository\SomeRepository.cs" />
     <Compile Include="Framework\Service\Service.cs" />
-    <Compile Include="ICustomerDAL.cs" />
-    <Compile Include="Logger.cs" />
     <Compile Include="ImportAttribute.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

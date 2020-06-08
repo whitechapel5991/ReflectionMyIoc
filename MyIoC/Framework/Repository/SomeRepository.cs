@@ -10,7 +10,7 @@ namespace MyIoC.Framework.Repository
     public class SomeRepository : AbstractRepository, IRepository
     {
         [Import]
-        public Connection connection { get; set; }
+        public Connection Connection { get; set; }
 
         public void Create()
         {
